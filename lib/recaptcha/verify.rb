@@ -25,15 +25,18 @@ module Recaptcha
         end
 
         Timeout::timeout(options[:timeout] || 3) do
+          Rails.logger.info('[VERIFY] Timeout block start')
           recaptcha = http.post_form(URI.parse(Recaptcha.configuration.verify_url), {
             "privatekey" => private_key,
             "remoteip"   => request.remote_ip,
             "challenge"  => params[:recaptcha_challenge_field],
             "response"   => params[:recaptcha_response_field]
           })
+          Rails.logger.info('[VERIFY] Timeout block end')
         end
         answer, error = recaptcha.body.split.map { |s| s.chomp }
         unless answer == 'true'
+          Rails.logger.info('[VERIFY] answer = false')
           flash[:recaptcha_error] = if defined?(I18n)
             I18n.translate("recaptcha.errors.#{error}", {:default => error})
           else
@@ -47,10 +50,13 @@ module Recaptcha
           end
           return false
         else
+          Rails.logger.info('[VERIFY] delete flash and return true')
           flash.delete(:recaptcha_error)
           return true
         end
       rescue Timeout::Error
+        Rails.logger.info('[VERIFY] timeout error')
+        Rails.logger.info("[VERIFY] gracefully: #{Recaptcha.configuration.handle_timeouts_gracefully.to_s}")
         if Recaptcha.configuration.handle_timeouts_gracefully
           flash[:recaptcha_error] = if defined?(I18n)
             I18n.translate('recaptcha.errors.recaptcha_unreachable', {:default => 'Recaptcha unreachable.'})
@@ -68,6 +74,7 @@ module Recaptcha
           raise RecaptchaError, "Recaptcha unreachable."
         end
       rescue Exception => e
+        Rails.logger.info("[VERIFY] Exception: #{e.message}")
         raise RecaptchaError, e.message, e.backtrace
       end
     end # verify_recaptcha
